@@ -5,23 +5,31 @@ from kivy.uix.screenmanager import Screen
 from kivymd.uix.button import *
 from functools import partial
 from kivymd.uix.dialog import MDDialog
+from kivymd.uix.snackbar import Snackbar
+from kivy.clock import Clock
+import copy
+import math
+
 
 class TwoPlayersScreen(Screen):
     pass
 
 
 class MainApp(MDApp):
-    clicked = True
-    count = 0
+    ai = 'X'
+    human = 'O'
+    currentplayer = 'human'
     game_board = {0:'-',1:'-',2:'-',3:'-',4:'-',5:'-',6:'-',7:'-',8:'-'}
-    winner = None
     buttons = []
+    winner = None
+    count = 0
+    scores = {'X': 10, 'O': -10, 'tie': 0}
 
     def showdialog(self,title,text):
-        d = MDDialog(auto_dismiss= False,title=title,text=text,size_hint=(.5,.3),text_button_ok="Restart",on_dismiss=self.restart)
-        d.open()
+        pass
 
-    def restart(self,*args):
+    def restart(self,winner,*args):
+        s = Snackbar(text=f'Player with {winner} won', font_size=20).show()
         for button in self.buttons:
             button.text = ' '
         self.count = 0
@@ -31,39 +39,76 @@ class MainApp(MDApp):
     def on_start(self):
         for i in range(9):
             grid = self.root.ids['twoplayerscreen'].ids['maingrid']
-            b = MDRectangleFlatButton(text=" ",font_size=35,size_hint=(.3,.3),on_release=self.b_clicked,id=str(i))
+            b = MDRectangleFlatButton(text=" ",font_size=35,size_hint=(.3,.3),on_release=self.b_clicked,padding=i)
             self.buttons.append(b)
             grid.add_widget(b)
+        self.computermove()
+
+
+    def computermove(self):
+        bestscore = -math.inf
+        bestMove = None
+        for move in self.game_board:
+            if self.game_board[move] == "-":
+                self.game_board[move] = self.ai
+                score = self.minimax(self.game_board,0,False)
+                self.game_board[move] = '-'
+                if score > bestscore:
+
+                    bestscore = score
+                    bestMove = move
+        self.game_board[bestMove] = self.ai
+        self.buttons[bestMove].text = self.ai
+        self.count += 1
+        self.currentplayer = self.human
+
+    def minimax(self,board,depth,isMaximizing):
+        result = self.check_winner()
+        if result is not None:
+            return self.scores[result]
+        if isMaximizing:
+            best_score = -math.inf
+            for move in self.game_board:
+                if self.game_board[move] == "-":
+                    self.game_board[move] = self.ai
+                    score = self.minimax(self.game_board,depth+1,False)
+
+                    self.game_board[move] = '-'
+                    best_score = max(score,best_score)
+            return best_score
+        else:
+            best_score = math.inf
+            for move in self.game_board:
+                if self.game_board[move] == "-":
+                    self.game_board[move] = self.human
+                    score = self.minimax(self.game_board, depth + 1, True)
+                    self.game_board[move] = '-'
+                    best_score = min(score, best_score)
+            return best_score
 
     def b_clicked(self,button):
-        if button.text == " " and self.clicked == True:
-            button.text = "X"
-            self.game_board[int(button.id)] = button.text
-            self.clicked = False
+        if self.currentplayer == self.human:
+            self.game_board[button.padding[0]] = self.human
+            button.text = self.human
             self.count += 1
-            self.check_winner(button)
-        elif button.text == " " and self.clicked == False:
-            button.text = "O"
-            self.game_board[int(button.id)] = button.text
-            self.clicked = True
-            self.count += 1
-            self.check_winner(button)
+            self.currentplayer = self.ai
+            self.computermove()
 
-    def check_winner(self,b):
+    def check_winner(self):
         row_winner = self.check_rows()
         column_winner = self.check_columns()
         diagonal_winner = self.check_diagonals()
         if row_winner:
-            self.showdialog("Congrats",f'Player with {row_winner} won')
-            self.winner = row_winner
+            return row_winner
         if column_winner:
-            self.showdialog("Congrats",f'Player with {column_winner} won')
-            self.winner = column_winner
+            return column_winner
         if diagonal_winner:
-            self.showdialog("Congrats",f'Player with {diagonal_winner} won')
-            self.winner = diagonal_winner
-        if self.count == 9 and self.winner is None:
-            self.showdialog("No Winner","It is a TIE")
+            return diagonal_winner
+
+        if self.winner is None and self.count == 9:
+            return 'tie'
+        if self.winner is not None:
+            return self.winner
 
     def check_rows(self):
         row_1 = self.game_board[0] == self.game_board[1] == self.game_board[2] != "-"
@@ -78,7 +123,6 @@ class MainApp(MDApp):
         else:
             return None
 
-
     def check_columns(self):
         column_1 = self.game_board[0] == self.game_board[3] == self.game_board[6] != "-"
         column_2 = self.game_board[1] == self.game_board[4] == self.game_board[7] != "-"
@@ -91,7 +135,6 @@ class MainApp(MDApp):
             return self.game_board[2]
         else:
             return None
-
 
     def check_diagonals(self):
         diagonal_1 =self.game_board[0] == self.game_board[4] == self.game_board[8] != "-"
